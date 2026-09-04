@@ -49,11 +49,15 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _cmd_status(logger, settings) -> int:
+    from bh_hidro.db.base import Base
+    from bh_hidro.db import models as _models  # noqa: F401
+
     logger.info("host=%s db=%s", settings.database_host, settings.database_name)
     print(f"database: {settings.database_user}@{settings.database_host}:{settings.database_port}/{settings.database_name}")
     print(f"log_dir:  {settings.log_dir}")
     print(f"down_dir: {settings.down_dir}")
     print(f"out_dir:  {settings.out_dir}")
+    print(f"models:   {len(Base.metadata.tables)} tables")
     try:
         import asyncio
 

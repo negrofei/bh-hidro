@@ -10,17 +10,20 @@ Esqueleto: paquete Python, CLI, conexión MySQL async, Docker de dos contenedore
 
 ```
 src/bh_hidro/
-  config.py          # env + INI
-  db/                # SQLAlchemy async (MySQL)
+  config.py
+  db/
+    models/          # contrato ORM 0p1 (tablas prod, sin 0p25/ERA5/GFS)
   ingest/download/   # ERALand / WRF  (pendiente)
   ingest/imerg/      # precipitación NASA + calib (pendiente)
   balance/           # motor FAO + Kc calendario | GDD (pendiente)
   output/            # GeoJSON → MBTiles (pendiente)
 ```
 
+Los modelos mapean las tablas de producción 0.1°. No incluyen `__initialize__` (shapefiles / cartopy): eso es carga inicial, no el cron. Fuera de este corte: ERA5, GFS, 0.25°, NoAgr, estaciones.
+
 Orden de transferencia desde bhERA5:
 
-1. Modelos de BD (`schemas`)
+1. Modelos de BD (`schemas`) — hecho
 2. Descarga ERALand / WRF
 3. IMERG
 4. Balance 0p1 (calendario; GDD como estrategia de Kc)
