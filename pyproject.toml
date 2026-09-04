@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bh-hidro"
+version = "0.1.0"
+description = "Balance hídrico operativo: ingest atmosférico, cálculo y salidas espaciales."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "Martin Feijoo" }]
+dependencies = [
+    "pydantic-settings>=2.2",
+    "sqlalchemy[asyncio]>=2.0",
+    "aiomysql>=0.2",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+[project.scripts]
+bh-hidro = "bh_hidro.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

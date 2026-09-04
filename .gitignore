@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Secrets and local env
+.env
+.env.*
+!.env.example
+*.ini
+!configs/example/*.ini
+.cdsapirc
+.credenciales*
+
+# Runtime data
+/logs/
+/descargas/
+/output/
+/data/
+*.log
+*.mbtiles
+*.geojson
+*.grib
+*.nc
+*.tif
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
