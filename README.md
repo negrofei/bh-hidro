@@ -6,29 +6,35 @@ bhERA5 sigue siendo el sistema en producción hasta que este repo lo reemplace.
 
 ## Qué hay ahora
 
-Esqueleto: paquete Python, CLI, conexión MySQL async, Docker de dos contenedores, configs de ejemplo. **Ningún paso del pipeline está implementado todavía.**
+Esqueleto + contrato ORM 0p1 + ingest ERALand/WRF (secuencial). IMERG, balance y tiles siguen pendientes.
 
 ```
 src/bh_hidro/
-  config.py
-  db/
-    models/          # contrato ORM 0p1 (tablas prod, sin 0p25/ERA5/GFS)
-  ingest/download/   # ERALand / WRF  (pendiente)
-  ingest/imerg/      # precipitación NASA + calib (pendiente)
-  balance/           # motor FAO + Kc calendario | GDD (pendiente)
-  output/            # GeoJSON → MBTiles (pendiente)
+  physics/penman.py  # FAO Penman-Monteith (sin reescribir la cuenta)
+  db/models/         # contrato ORM 0p1
+  ingest/download/   # CDS ERALand + S3 WRF → MySQL
+  ingest/imerg/      # pendiente
+  balance/           # pendiente
+  output/            # pendiente
 ```
 
-Los modelos mapean las tablas de producción 0.1°. No incluyen `__initialize__` (shapefiles / cartopy): eso es carga inicial, no el cron. Fuera de este corte: ERA5, GFS, 0.25°, NoAgr, estaciones.
+Geografía (shapefiles → formitas) es `bootstrap`, no el cron. Backups de operativo separados de la referencia versionada.
 
-Orden de transferencia desde bhERA5:
+Orden de transferencia:
 
-1. Modelos de BD (`schemas`) — hecho
-2. Descarga ERALand / WRF
+1. Modelos de BD — hecho
+2. Descarga ERALand / WRF — hecho (secuencial; WRF solo a grilla land)
 3. IMERG
-4. Balance 0p1 (calendario; GDD como estrategia de Kc)
-5. Outputs (GeoJSON → tiles; PNG fuera del cron)
-6. Ops (monitor, backups, cron)
+4. Balance 0p1
+5. Outputs
+6. Ops
+
+```bash
+bh-hidro download --dry-run
+bh-hidro download --start-date 20260820 --end-date 20260822
+```
+
+Hace falta CDO en el sistema (la imagen Docker lo instala) y un `.cdsapirc` vía `CDSAPI_RC`.
 
 ERA5 / 0.25° queda fuera del primer corte.
 

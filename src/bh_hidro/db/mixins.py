@@ -132,6 +132,19 @@ class GridLinked(TableOps):
 
         return ReticulaLand
 
+    @classmethod
+    async def dates_for_provinces(cls, provincias: list[int], **filters) -> list:
+        nodes = await cls.association().read_by_provincias(provincias)
+        if nodes.empty:
+            return []
+        stmt = select(cls.fecha.distinct()).where(cls.id_nodo.in_(nodes["id_nodo"].tolist()))
+        for name, value in filters.items():
+            stmt = stmt.where(getattr(cls, name) == value)
+        df = await cls.fetch_df(stmt)
+        if df.empty:
+            return []
+        return [row.date() if hasattr(row, "date") else row for row in df["fecha"].tolist()]
+
 
 async def resolve_province_ids(provincias: str | int | Sequence) -> list[int]:
     values = _as_list(provincias)

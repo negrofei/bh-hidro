@@ -1,0 +1,14 @@
+#
+# gridID 1
+#
+gridtype  = latlon
+gridsize  = 78070
+xsize     = 211
+ysize     = 370
+xname     = lon
+yname     = lat
+xfirst    = -73.75
+xinc      = 0.1
+yfirst    = -55.9
+yinc      = 0.1
+scanningMode = 64

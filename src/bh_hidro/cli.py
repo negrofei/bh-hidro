@@ -26,7 +26,10 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command")
 
     sub.add_parser("status", help="Mostrar config e intentar ping a MySQL")
-    sub.add_parser("download", help="Descarga ERALand / WRF")
+    download = sub.add_parser("download", help="Descarga ERALand / WRF")
+    download.add_argument("--dry-run", action="store_true")
+    download.add_argument("--start-date", help="YYYYMMDD")
+    download.add_argument("--end-date", help="YYYYMMDD")
     sub.add_parser("imerg", help="Precipitación IMERG")
     sub.add_parser("balance", help="Cálculo de balance 0p1")
     sub.add_parser("output", help="GeoJSON / tiles")
@@ -42,6 +45,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "status":
         return _cmd_status(logger, settings)
+
+    if args.command == "download":
+        return _cmd_download(args, settings)
 
     logger.info("%s: %s", args.command, _NOT_READY)
     print(_NOT_READY, file=sys.stderr)
@@ -77,6 +83,33 @@ async def _ping_mysql(settings) -> None:
     async with engine.connect() as conn:
         await conn.execute(text("SELECT 1"))
     await dispose_engine()
+
+
+def _parse_ymd(value: str | None):
+    if not value:
+        return None
+    from datetime import datetime
+
+    return datetime.strptime(value, "%Y%m%d").date()
+
+
+def _cmd_download(args, settings) -> int:
+    import asyncio
+
+    from bh_hidro.ingest.download import run_download
+
+    start = _parse_ymd(args.start_date)
+    end = _parse_ymd(args.end_date)
+    results = asyncio.run(
+        run_download(settings=settings, start=start, end=end, dry_run=args.dry_run)
+    )
+    for product, dates in results.items():
+        print(f"{product}: {len(dates)} dates")
+        for fecha, status in sorted(dates.items()):
+            print(f"  {fecha} {status}")
+    if any(status == "ERROR" for dates in results.values() for status in dates.values()):
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
