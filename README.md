@@ -6,7 +6,7 @@ bhERA5 sigue siendo el sistema en producción hasta que este repo lo reemplace.
 
 ## Qué hay ahora
 
-Esqueleto + contrato ORM 0p1 + ingest ERALand/WRF + IMERG Late/Early 0.1°. Balance y tiles siguen pendientes.
+Pipeline diario 0.1°: ERALand/WRF → IMERG Late/Early → balance calendario FAO → GeoJSON (y MBTiles si hay `tippecanoe`). Ops (cron, backups, Calib semanal) queda después.
 
 ```
 src/bh_hidro/
@@ -14,31 +14,23 @@ src/bh_hidro/
   db/models/         # contrato ORM 0p1
   ingest/download/   # CDS ERALand + S3 WRF → MySQL
   ingest/imerg/      # NASA PPS Late/Early → imerg0p1
-  balance/           # pendiente
-  output/            # pendiente
+  balance/           # FAO bucket + CalendarKc (GddKc para campañas)
+  output/            # GeoJSON → tippecanoe
 ```
 
 Geografía (shapefiles → formitas) es `bootstrap`, no el cron. Backups de operativo separados de la referencia versionada.
 
-Orden de transferencia:
-
-1. Modelos de BD — hecho
-2. Descarga ERALand / WRF — hecho (secuencial; WRF solo a grilla land)
-3. IMERG — hecho (diario Late → Early, solo 0.1°; Calib semanal queda para ops)
-4. Balance 0p1
-5. Outputs
-6. Ops
-
 ```bash
-bh-hidro download --dry-run
+bh-hidro run --dry-run
 bh-hidro download --start-date 20260820 --end-date 20260822
-bh-hidro imerg --dry-run
 bh-hidro imerg --start-date 20260820 --end-date 20260822
+bh-hidro balance --start-date 20260820 --end-date 20260822
+bh-hidro output --start-date 20260820 --end-date 20260822
 ```
 
-Hace falta CDO (la imagen Docker lo instala), un `.cdsapirc` vía `CDSAPI_RC`, y `IMERG_USER` / `IMERG_PASSWORD` (el email de NASA PPS en ambos).
+Hace falta CDO, un `.cdsapirc` vía `CDSAPI_RC`, y `IMERG_USER` / `IMERG_PASSWORD` (el email de NASA PPS en ambos). `tippecanoe` es opcional: sin él se escribe GeoJSON y se salta el MBTiles.
 
-ERA5 / 0.25° queda fuera del primer corte.
+ERA5 / 0.25° / NoAgr / PNG quedan fuera del primer corte.
 
 ## Arranque
 
@@ -59,4 +51,4 @@ python3 -m venv .venv
 .venv/bin/pytest
 ```
 
-La app queda idle (`tail -f /dev/null`), igual que en prod. `scripts/run.sh` ya llama download e imerg; balance y output siguen pendientes.
+La app queda idle (`tail -f /dev/null`), igual que en prod. `scripts/run.sh` corre download → imerg → balance → output.

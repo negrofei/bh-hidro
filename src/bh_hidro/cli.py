@@ -1,4 +1,4 @@
-"""CLI. Pipeline commands are stubs until each module is transferred."""
+"""CLI. Operative pipeline: download → imerg → balance → output."""
 
 from __future__ import annotations
 
@@ -34,9 +34,18 @@ def main(argv: list[str] | None = None) -> int:
     imerg.add_argument("--dry-run", action="store_true")
     imerg.add_argument("--start-date", help="YYYYMMDD")
     imerg.add_argument("--end-date", help="YYYYMMDD")
-    sub.add_parser("balance", help="Cálculo de balance 0p1")
-    sub.add_parser("output", help="GeoJSON / tiles")
-    sub.add_parser("run", help="Pipeline completo (cuando existan los módulos)")
+    balance = sub.add_parser("balance", help="Cálculo de balance 0p1")
+    balance.add_argument("--dry-run", action="store_true")
+    balance.add_argument("--start-date", help="YYYYMMDD")
+    balance.add_argument("--end-date", help="YYYYMMDD")
+    output = sub.add_parser("output", help="GeoJSON / tiles")
+    output.add_argument("--dry-run", action="store_true")
+    output.add_argument("--start-date", help="YYYYMMDD")
+    output.add_argument("--end-date", help="YYYYMMDD")
+    run = sub.add_parser("run", help="Pipeline completo")
+    run.add_argument("--dry-run", action="store_true")
+    run.add_argument("--start-date", help="YYYYMMDD")
+    run.add_argument("--end-date", help="YYYYMMDD")
 
     args = parser.parse_args(argv)
     settings = get_settings()
@@ -54,6 +63,15 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "imerg":
         return _cmd_imerg(args, settings)
+
+    if args.command == "balance":
+        return _cmd_balance(args, settings)
+
+    if args.command == "output":
+        return _cmd_output(args, settings)
+
+    if args.command == "run":
+        return _cmd_run(args, settings)
 
     logger.info("%s: %s", args.command, _NOT_READY)
     print(_NOT_READY, file=sys.stderr)
@@ -133,6 +151,54 @@ def _cmd_imerg(args, settings) -> int:
         for fecha, status in sorted(dates.items()):
             print(f"  {fecha} {status}")
     if any(status == "ERROR" for dates in results.values() for status in dates.values()):
+        return 1
+    return 0
+
+
+def _print_results(results: dict) -> int:
+    for product, dates in results.items():
+        print(f"{product}: {len(dates)} dates")
+        for fecha, status in sorted(dates.items()):
+            print(f"  {fecha} {status}")
+    if any(status == "ERROR" for dates in results.values() for status in dates.values()):
+        return 1
+    return 0
+
+
+def _cmd_balance(args, settings) -> int:
+    import asyncio
+
+    from bh_hidro.balance import run_balance
+
+    start = _parse_ymd(args.start_date)
+    end = _parse_ymd(args.end_date)
+    results = asyncio.run(
+        run_balance(settings=settings, start=start, end=end, dry_run=args.dry_run)
+    )
+    return _print_results(results)
+
+
+def _cmd_output(args, settings) -> int:
+    import asyncio
+
+    from bh_hidro.output import run_output
+
+    start = _parse_ymd(args.start_date)
+    end = _parse_ymd(args.end_date)
+    results = asyncio.run(
+        run_output(settings=settings, start=start, end=end, dry_run=args.dry_run)
+    )
+    return _print_results(results)
+
+
+def _cmd_run(args, settings) -> int:
+    codes = [
+        _cmd_download(args, settings),
+        _cmd_imerg(args, settings),
+        _cmd_balance(args, settings),
+        _cmd_output(args, settings),
+    ]
+    if 1 in codes:
         return 1
     return 0
 

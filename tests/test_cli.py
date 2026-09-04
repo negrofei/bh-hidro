@@ -12,12 +12,6 @@ def test_status_prints_without_db(capsys):
     assert "mysql:" in out
 
 
-def test_untransferred_command_exits_two():
-    assert main(["balance"]) == 2
-    assert main(["output"]) == 2
-    assert main(["run"]) == 2
-
-
 def test_download_dry_run(capsys):
     assert main(["download", "--dry-run", "--start-date", "20260820", "--end-date", "20260822"]) == 0
     out = capsys.readouterr().out
@@ -30,4 +24,16 @@ def test_imerg_dry_run(capsys):
     out = capsys.readouterr().out
     assert "late:" in out
     assert "early:" in out
+    assert "2026-08-20 dry-run" in out
+
+
+def test_balance_dry_run(capsys):
+    assert main(["balance", "--dry-run", "--start-date", "20260820", "--end-date", "20260822"]) == 0
+    out = capsys.readouterr().out
+    assert "2026-08-20 dry-run" in out
+
+
+def test_output_dry_run(capsys):
+    assert main(["output", "--dry-run", "--start-date", "20260820", "--end-date", "20260822"]) == 0
+    out = capsys.readouterr().out
     assert "2026-08-20 dry-run" in out
