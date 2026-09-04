@@ -145,6 +145,39 @@ class GridLinked(TableOps):
             return []
         return [row.date() if hasattr(row, "date") else row for row in df["fecha"].tolist()]
 
+    @classmethod
+    async def exists_fecha_province(cls, fecha, id_provincia: int) -> bool:
+        from sqlalchemy import exists as sql_exists
+
+        from bh_hidro.db.session import get_session
+
+        nodes = await cls.association().read_by_provincias(id_provincia)
+        if nodes.empty:
+            return False
+        stmt = select(
+            sql_exists().where(
+                cls.fecha == fecha,
+                cls.id_nodo.in_(nodes["id_nodo"].tolist()),
+            )
+        )
+        async with get_session() as session:
+            return bool(await session.scalar(stmt))
+
+    @classmethod
+    async def by_fecha_province(cls, fecha, id_provincia: int, columns: list[str] | None = None) -> pd.DataFrame:
+        nodes = await cls.association().read_by_provincias(id_provincia)
+        if nodes.empty:
+            return pd.DataFrame()
+        if columns:
+            stmt = select(*[cls.__table__.c[name] for name in columns])
+        else:
+            stmt = select(cls.__table__.c)
+        stmt = stmt.where(
+            cls.fecha == fecha,
+            cls.id_nodo.in_(nodes["id_nodo"].tolist()),
+        )
+        return await cls.fetch_df(stmt)
+
 
 async def resolve_province_ids(provincias: str | int | Sequence) -> list[int]:
     values = _as_list(provincias)

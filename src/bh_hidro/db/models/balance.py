@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from sqlalchemy import Column, Date, ForeignKey, ForeignKeyConstraint, Integer, Numeric, String, select
+from sqlalchemy import Column, Date, ForeignKey, ForeignKeyConstraint, Integer, Numeric, String, and_, select
 
 from bh_hidro.db.base import Base
 from bh_hidro.db.mixins import ProvinceScoped
@@ -58,6 +58,23 @@ class BalanceHidricoMerge0p1(Base, ProvinceScoped):
         if fecha_desde is not None:
             stmt = stmt.where(cls.fecha >= fecha_desde)
         return await cls.fetch_df(stmt)
+
+    @classmethod
+    async def by_fecha_crop_province(
+        cls,
+        fecha: date,
+        id_cultivo_general: int,
+        id_provincia: int,
+    ):
+        return await cls.fetch_df(
+            select(cls.__table__.c).where(
+                and_(
+                    cls.fecha == fecha,
+                    cls.id_cultivo_general == id_cultivo_general,
+                    cls.id_provincia == id_provincia,
+                )
+            )
+        )
 
     def __repr__(self) -> str:
         return (
