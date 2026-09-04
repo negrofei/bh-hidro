@@ -9,6 +9,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
         default-mysql-client \
         cdo \
+        gdal-bin \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

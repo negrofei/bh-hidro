@@ -30,7 +30,10 @@ def main(argv: list[str] | None = None) -> int:
     download.add_argument("--dry-run", action="store_true")
     download.add_argument("--start-date", help="YYYYMMDD")
     download.add_argument("--end-date", help="YYYYMMDD")
-    sub.add_parser("imerg", help="Precipitación IMERG")
+    imerg = sub.add_parser("imerg", help="Precipitación IMERG Late/Early 0p1")
+    imerg.add_argument("--dry-run", action="store_true")
+    imerg.add_argument("--start-date", help="YYYYMMDD")
+    imerg.add_argument("--end-date", help="YYYYMMDD")
     sub.add_parser("balance", help="Cálculo de balance 0p1")
     sub.add_parser("output", help="GeoJSON / tiles")
     sub.add_parser("run", help="Pipeline completo (cuando existan los módulos)")
@@ -48,6 +51,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "download":
         return _cmd_download(args, settings)
+
+    if args.command == "imerg":
+        return _cmd_imerg(args, settings)
 
     logger.info("%s: %s", args.command, _NOT_READY)
     print(_NOT_READY, file=sys.stderr)
@@ -102,6 +108,25 @@ def _cmd_download(args, settings) -> int:
     end = _parse_ymd(args.end_date)
     results = asyncio.run(
         run_download(settings=settings, start=start, end=end, dry_run=args.dry_run)
+    )
+    for product, dates in results.items():
+        print(f"{product}: {len(dates)} dates")
+        for fecha, status in sorted(dates.items()):
+            print(f"  {fecha} {status}")
+    if any(status == "ERROR" for dates in results.values() for status in dates.values()):
+        return 1
+    return 0
+
+
+def _cmd_imerg(args, settings) -> int:
+    import asyncio
+
+    from bh_hidro.ingest.imerg import run_imerg
+
+    start = _parse_ymd(args.start_date)
+    end = _parse_ymd(args.end_date)
+    results = asyncio.run(
+        run_imerg(settings=settings, start=start, end=end, dry_run=args.dry_run)
     )
     for product, dates in results.items():
         print(f"{product}: {len(dates)} dates")

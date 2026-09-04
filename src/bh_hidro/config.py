@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     delta_days_back_output: int = 1
     delta_days_forward_output: int = 7
 
+    imerg_user: str = ""
+    imerg_password: str = ""
+
     download_config: Path = Path("configs/example/download.ini")
     reports_config: Path = Path("configs/example/reports.ini")
     balance_config: Path = Path("configs/example/balance.ini")

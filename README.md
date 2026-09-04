@@ -6,14 +6,14 @@ bhERA5 sigue siendo el sistema en producción hasta que este repo lo reemplace.
 
 ## Qué hay ahora
 
-Esqueleto + contrato ORM 0p1 + ingest ERALand/WRF (secuencial). IMERG, balance y tiles siguen pendientes.
+Esqueleto + contrato ORM 0p1 + ingest ERALand/WRF + IMERG Late/Early 0.1°. Balance y tiles siguen pendientes.
 
 ```
 src/bh_hidro/
   physics/penman.py  # FAO Penman-Monteith (sin reescribir la cuenta)
   db/models/         # contrato ORM 0p1
   ingest/download/   # CDS ERALand + S3 WRF → MySQL
-  ingest/imerg/      # pendiente
+  ingest/imerg/      # NASA PPS Late/Early → imerg0p1
   balance/           # pendiente
   output/            # pendiente
 ```
@@ -24,7 +24,7 @@ Orden de transferencia:
 
 1. Modelos de BD — hecho
 2. Descarga ERALand / WRF — hecho (secuencial; WRF solo a grilla land)
-3. IMERG
+3. IMERG — hecho (diario Late → Early, solo 0.1°; Calib semanal queda para ops)
 4. Balance 0p1
 5. Outputs
 6. Ops
@@ -32,9 +32,11 @@ Orden de transferencia:
 ```bash
 bh-hidro download --dry-run
 bh-hidro download --start-date 20260820 --end-date 20260822
+bh-hidro imerg --dry-run
+bh-hidro imerg --start-date 20260820 --end-date 20260822
 ```
 
-Hace falta CDO en el sistema (la imagen Docker lo instala) y un `.cdsapirc` vía `CDSAPI_RC`.
+Hace falta CDO (la imagen Docker lo instala), un `.cdsapirc` vía `CDSAPI_RC`, y `IMERG_USER` / `IMERG_PASSWORD` (el email de NASA PPS en ambos).
 
 ERA5 / 0.25° queda fuera del primer corte.
 
@@ -57,4 +59,4 @@ python3 -m venv .venv
 .venv/bin/pytest
 ```
 
-La app queda idle (`tail -f /dev/null`), igual que en prod. `scripts/run.sh` es un placeholder hasta que existan los módulos.
+La app queda idle (`tail -f /dev/null`), igual que en prod. `scripts/run.sh` ya llama download e imerg; balance y output siguen pendientes.

@@ -8,7 +8,7 @@ from datetime import date, timedelta
 import pandas as pd
 import xarray as xr
 
-from bh_hidro.db.models.atmospheric import DatoERALand, WRF0p1
+from bh_hidro.db.models.atmospheric import DatoERALand, Imerg0p1, WRF0p1
 from bh_hidro.db.models.grids import ReticulaLand
 
 logger = logging.getLogger(__name__)
@@ -62,4 +62,17 @@ async def upsert_wrf(ds: xr.Dataset, chunk: int = 10000, today: date | None = No
         await session.commit()
     df = keep_table_columns(await attach_nodos(dataset_to_frame(ds)), WRF0p1)
     await WRF0p1.upsert_df(df, chunk_size=chunk)
+    return len(df)
+
+
+async def upsert_imerg0p1(ds: xr.Dataset | xr.DataArray, id_origen: int, chunk: int = 5000) -> int:
+    if isinstance(ds, xr.DataArray):
+        ds = ds.to_dataset(name="precip")
+    df = dataset_to_frame(ds)
+    if "precip" in df.columns:
+        df = df[df["precip"] > 0]
+        df["precip"] = df["precip"].clip(upper=999.99)
+    df["id_origen"] = id_origen
+    df = keep_table_columns(await attach_nodos(df), Imerg0p1)
+    await Imerg0p1.upsert_df(df, chunk_size=chunk)
     return len(df)
