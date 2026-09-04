@@ -21,7 +21,8 @@ RUN pip install --upgrade pip && pip install -e .
 RUN mkdir -p /descargas /logs /output /output/tiles /output/tmp
 
 COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY scripts ./scripts
+RUN chmod +x /entrypoint.sh scripts/*.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["tail", "-f", "/dev/null"]

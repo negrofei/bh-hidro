@@ -1,0 +1,56 @@
+# Standalone local MySQL on host 3309. Use this only if bh-mysql-prod is not available.
+#   docker compose -f docker-compose.embedded.yml up --build -d
+# Default docker-compose.yml attaches to the running prod instance instead.
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: bh-hidro-mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    env_file:
+      - .env
+    environment:
+      MYSQL_DATABASE: ${DATABASE_NAME:-bh_hidro}
+      MYSQL_USER: ${DATABASE_USER:-operativo}
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+    ports:
+      - "3309:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.app
+    container_name: bh-hidro-app
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_HOST: db
+      DATABASE_PORT: 3306
+    volumes:
+      - ./src:/app/src
+      - ./configs:/app/configs
+      - ./scripts:/app/scripts
+      - descargas:/descargas
+      - logs:/logs
+      - output:/output
+    restart: unless-stopped
+    command: ["tail", "-f", "/dev/null"]
+
+volumes:
+  db_data:
+  descargas:
+  logs:
+  output:

@@ -46,6 +46,7 @@ where = ["src"]
 bh_hidro = [
     "ingest/download/ReticulaLand.grid",
     "ingest/imerg/imergDataGrid.txt",
+    "ingest/imerg/imergCalibGrid.txt",
 ]
 
 [tool.pytest.ini_options]

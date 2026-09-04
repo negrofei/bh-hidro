@@ -1,39 +1,17 @@
-services:
-  db:
-    image: mysql:8.0
-    container_name: bh-hidro-mysql
-    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
-    env_file:
-      - .env
-    environment:
-      MYSQL_DATABASE: ${DATABASE_NAME:-bh_hidro}
-      MYSQL_USER: ${DATABASE_USER:-operativo}
-      MYSQL_PASSWORD: ${DATABASE_PASSWORD}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-    volumes:
-      - db_data:/var/lib/mysql
-    ports:
-      - "3309:3306"
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 8
-      start_period: 30s
-    restart: unless-stopped
+# App only. Reuses the running bh-mysql-prod (schema bh_hidro, not fdc_database).
+# Host CLI: DATABASE_HOST=127.0.0.1 DATABASE_PORT=3308 in .env
+# Inside this container those two are overridden to the docker DNS name.
 
+services:
   app:
     build:
       context: .
       dockerfile: docker/Dockerfile.app
     container_name: bh-hidro-app
-    depends_on:
-      db:
-        condition: service_healthy
     env_file:
       - .env
     environment:
-      DATABASE_HOST: db
+      DATABASE_HOST: bh-mysql-prod
       DATABASE_PORT: 3306
     volumes:
       - ./src:/app/src
@@ -42,11 +20,17 @@ services:
       - descargas:/descargas
       - logs:/logs
       - output:/output
+    networks:
+      - prod
     restart: unless-stopped
     command: ["tail", "-f", "/dev/null"]
 
+networks:
+  prod:
+    name: ${DOCKER_NETWORK:-python3mysql_liberagro}
+    external: true
+
 volumes:
-  db_data:
   descargas:
   logs:
   output:

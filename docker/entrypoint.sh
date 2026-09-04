@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-host="${DATABASE_HOST:-db}"
+host="${DATABASE_HOST:-bh-mysql-prod}"
 port="${DATABASE_PORT:-3306}"
 
 if command -v mysqladmin >/dev/null 2>&1; then

@@ -3,6 +3,7 @@ from datetime import date, datetime, timedelta
 import pandas as pd
 
 from bh_hidro.ingest.imerg.dates import best_origin_by_date, clip_imerg, needs_next_month_listing
+from bh_hidro.ingest.imerg.geotiff import daily_scale
 from bh_hidro.ingest.imerg.origins import ORIGIN, better_or_equal_already
 from bh_hidro.ingest.imerg.pluvio import EXPECTED_3HR, filter_trihorario, pluviometric_slots, timestamp_from_name
 
@@ -45,6 +46,18 @@ def test_priority_skips_worse_or_equal_origin():
     assert better_or_equal_already(ORIGIN["late"], ORIGIN["early"]) is True
     assert better_or_equal_already(ORIGIN["early"], ORIGIN["late"]) is False
     assert better_or_equal_already(ORIGIN["ImergCalib"], ORIGIN["late"]) is True
+
+
+def test_calib_is_better_than_late():
+    assert ORIGIN["calib"] == ORIGIN["ImergCalib"] == 1
+    assert better_or_equal_already(ORIGIN["ImergCalib"], ORIGIN["late"]) is True
+    assert better_or_equal_already(ORIGIN["late"], ORIGIN["ImergCalib"]) is False
+
+
+def test_daily_scale_calib_is_mm_not_tenths():
+    assert daily_scale("late") == 0.1
+    assert daily_scale("early") == 0.1
+    assert daily_scale("calib") == 1.0
 
 
 def test_clip_imerg_stops_at_yesterday():

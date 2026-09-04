@@ -26,6 +26,21 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command")
 
     sub.add_parser("status", help="Mostrar config e intentar ping a MySQL")
+    bootstrap = sub.add_parser("bootstrap", help="Crear schema bh_hidro y copiar referencia desde fdc_database")
+    bootstrap.add_argument("--dry-run", action="store_true")
+    bootstrap.add_argument("--force", action="store_true", help="Truncar tablas de referencia destino y volver a copiar")
+    bootstrap.add_argument(
+        "--from-mysql",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Copiar tablas de referencia en la misma instancia MySQL",
+    )
+    bootstrap.add_argument(
+        "--create-schema",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="CREATE DATABASE + create_all del ORM",
+    )
     download = sub.add_parser("download", help="Descarga ERALand / WRF")
     download.add_argument("--dry-run", action="store_true")
     download.add_argument("--start-date", help="YYYYMMDD")
@@ -34,6 +49,7 @@ def main(argv: list[str] | None = None) -> int:
     imerg.add_argument("--dry-run", action="store_true")
     imerg.add_argument("--start-date", help="YYYYMMDD")
     imerg.add_argument("--end-date", help="YYYYMMDD")
+    imerg.add_argument("--calib", action="store_true", help="Correr IMERG Calib (FTP semanal)")
     balance = sub.add_parser("balance", help="Cálculo de balance 0p1")
     balance.add_argument("--dry-run", action="store_true")
     balance.add_argument("--start-date", help="YYYYMMDD")
@@ -57,6 +73,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "status":
         return _cmd_status(logger, settings)
+
+    if args.command == "bootstrap":
+        return _cmd_bootstrap(args, settings)
 
     if args.command == "download":
         return _cmd_download(args, settings)
@@ -95,6 +114,31 @@ def _cmd_status(logger, settings) -> int:
         print("mysql: ok")
     except Exception as exc:
         print(f"mysql: unreachable ({exc})")
+    return 0
+
+
+def _cmd_bootstrap(args, settings) -> int:
+    import asyncio
+
+    from bh_hidro.db.bootstrap import run_bootstrap
+
+    result = asyncio.run(
+        run_bootstrap(
+            settings=settings,
+            from_mysql=args.from_mysql,
+            create=args.create_schema,
+            force=args.force,
+            dry_run=args.dry_run,
+        )
+    )
+    print(f"source: {settings.source_database_name} -> dest: {settings.database_name}")
+    for table, n in result.copied.items():
+        print(f"  copy {table}: {n} rows")
+    for table, n in result.skipped.items():
+        if n < 0:
+            print(f"  skip {table}: missing on source")
+        else:
+            print(f"  skip {table}: {n} rows already there")
     return 0
 
 
@@ -144,7 +188,13 @@ def _cmd_imerg(args, settings) -> int:
     start = _parse_ymd(args.start_date)
     end = _parse_ymd(args.end_date)
     results = asyncio.run(
-        run_imerg(settings=settings, start=start, end=end, dry_run=args.dry_run)
+        run_imerg(
+            settings=settings,
+            start=start,
+            end=end,
+            dry_run=args.dry_run,
+            calib=getattr(args, "calib", False),
+        )
     )
     for product, dates in results.items():
         print(f"{product}: {len(dates)} dates")
