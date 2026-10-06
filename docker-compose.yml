@@ -13,13 +13,18 @@ services:
     environment:
       DATABASE_HOST: bh-mysql-prod
       DATABASE_PORT: 3306
+      LOG_DIR: /logs
+      DOWN_DIR: /descargas
+      OUT_DIR: /output
     volumes:
       - ./src:/app/src
       - ./configs:/app/configs
       - ./scripts:/app/scripts
       - descargas:/descargas
-      - logs:/logs
+      - ./logs:/logs
       - output:/output
+      # Tileserver reads this dir (prod: /var/www/liberagro/geodata/tiles).
+      - ${TILES_HOST_DIR:-./output/tiles}:/output/tiles
     networks:
       - prod
     restart: unless-stopped
@@ -32,5 +37,4 @@ networks:
 
 volumes:
   descargas:
-  logs:
   output:

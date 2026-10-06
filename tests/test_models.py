@@ -26,6 +26,7 @@ EXPECTED_TABLES = {
     "formitas_merge_0p1",
     "datos_eraland",
     "wrf0p1",
+    "gfs0p1",
     "imerg0p1",
     "imerg",
     "balance_hidrico_merge0p1",
@@ -39,7 +40,6 @@ EXCLUDED_TABLES = {
     "datos_era5",
     "reticula_era5",
     "reticulaERA5_provincia",
-    "gfs0p1",
     "gfs0p25",
     "wrf0p25",
     "imerg0p25",
@@ -60,10 +60,15 @@ def test_expected_tables_match_prod_names():
     assert set(Base.metadata.tables) == EXPECTED_TABLES
 
 
-def test_first_cut_excludes_era5_gfs_0p25():
+def test_first_cut_excludes_era5_gfs025():
     configure_mappers()
     names = set(Base.metadata.tables)
     assert names.isdisjoint(EXCLUDED_TABLES)
+
+
+def test_gfs0p1_columns():
+    cols = {c.name for c in Base.metadata.tables["gfs0p1"].columns}
+    assert {"id_nodo", "fecha", "t2m_min", "t2m_max", "tp", "etp", "day_prono"} <= cols
 
 
 def test_public_model_exports():
@@ -90,3 +95,20 @@ def test_status_reports_model_count(capsys):
 
     assert main(["status"]) == 0
     assert f"models:   {len(EXPECTED_TABLES)} tables" in capsys.readouterr().out
+
+
+def test_dates_loaded_select_keeps_fecha_name():
+    from sqlalchemy import select
+
+    from bh_hidro.db.models.atmospheric import Imerg0p1
+
+    broken = select(Imerg0p1.__table__.c.fecha.distinct(), Imerg0p1.id_origen)
+    assert "fecha" not in broken.selected_columns.keys()
+
+    stmt = (
+        select(Imerg0p1.__table__.c.fecha.label("fecha"), Imerg0p1.id_origen)
+        .where(Imerg0p1.fecha.between("2000-01-01", "2000-01-03"))
+        .distinct()
+    )
+    assert list(stmt.selected_columns.keys())[0] == "fecha"
+    assert "id_origen" in stmt.selected_columns.keys()

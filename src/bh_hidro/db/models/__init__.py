@@ -1,4 +1,4 @@
-"""0p1 ORM contract. 0p25 / ERA5 / GFS / NoAgr / estaciones quedan fuera."""
+"""0p1 ORM contract. 0p25 / ERA5 / NoAgr / estaciones quedan fuera."""
 
 from bh_hidro.db.models.geographic import Departamento, Provincia
 from bh_hidro.db.models.grids import (
@@ -22,7 +22,7 @@ from bh_hidro.db.models.agricultural import (
 )
 from bh_hidro.db.models.shapefiles import SueloShapefileMerge
 from bh_hidro.db.models.formitas import FormitasMerge0p1
-from bh_hidro.db.models.atmospheric import DatoERALand, Imerg0p1, ImergNative, WRF0p1
+from bh_hidro.db.models.atmospheric import DatoERALand, GFS0p1, Imerg0p1, ImergNative, WRF0p1
 from bh_hidro.db.models.balance import BalanceHidricoMerge0p1, EstadisticasDepartamento0p1
 from bh_hidro.db.models.custom import (
     BalanceHidricoCustom0p1,
@@ -52,6 +52,7 @@ __all__ = [
     "FormitasMerge0p1",
     "DatoERALand",
     "WRF0p1",
+    "GFS0p1",
     "Imerg0p1",
     "ImergNative",
     "BalanceHidricoMerge0p1",

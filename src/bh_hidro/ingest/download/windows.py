@@ -1,4 +1,4 @@
-"""Operative date windows for ERALand and WRF. No I/O."""
+"""Operative date windows for ERALand, WRF and GFS. No I/O."""
 
 from __future__ import annotations
 
@@ -8,9 +8,13 @@ from datetime import date, timedelta
 LAG_REANALYSIS = timedelta(days=7)
 WRF_MAX_FCST = timedelta(hours=72)
 WRF_START = date(2022, 1, 1)
+GFS_MAX_FCST = timedelta(hours=384)
+GFS_LOOKBACK = timedelta(days=9)
 
 
 def daterange(start: date, end: date) -> list[date]:
+    if start > end:
+        return []
     days = (end - start).days
     return [start + timedelta(days=i) for i in range(days + 1)]
 
@@ -24,11 +28,16 @@ def operative_window(
 
 
 def clip_eraland(start: date, end: date, today: date, lag: timedelta = LAG_REANALYSIS) -> tuple[date, date]:
+    """Keep the requested window; never pull days the caller did not ask for.
+
+    ERALand only exists up to today-lag. If the whole request is after that,
+    return an empty range (start > end) instead of snapping back to the last day.
+    """
     last = today - lag
+    if start > last:
+        return start, start - timedelta(days=1)
     if end > last:
         end = last
-    if start > last:
-        start = last
     return start, end
 
 
@@ -64,4 +73,34 @@ def wrf_dates(
         candidates = window
 
     candidates = [d for d in candidates if d <= horizon]
+    return [d for d in candidates if d not in already]
+
+
+def gfs_dates(
+    start: date,
+    end: date,
+    today: date,
+    already: set[date] | None = None,
+    lag: timedelta = LAG_REANALYSIS,
+    max_fcst: timedelta = GFS_MAX_FCST,
+    lookback: timedelta = GFS_LOOKBACK,
+) -> list[date]:
+    """Dates after the last reanalysis through GFS horizon, not already in gfs0p1."""
+    already = already or set()
+    window = daterange(start, end)
+    if not window:
+        return []
+
+    last_rean = today - lag
+    earliest = today - lookback
+    horizon = today + max_fcst
+
+    if last_rean in window:
+        candidates = window[window.index(last_rean) + 1 :]
+    elif last_rean >= min(window):
+        candidates = []
+    else:
+        candidates = window
+
+    candidates = [d for d in candidates if earliest <= d <= horizon]
     return [d for d in candidates if d not in already]

@@ -9,6 +9,7 @@ from pathlib import Path
 import xarray as xr
 
 from bh_hidro.ingest.download.daily import (
+    concat_netcdf,
     hourly_to_daily,
     wrf_add_radiation,
     wrf_add_vapor,
@@ -41,13 +42,16 @@ def assemble_daily(down_dir: Path, valid: date, init: date) -> Path:
     if not all(p.is_file() for p in hourly) or not daily24.is_file():
         raise FileNotFoundError(f"missing interpolated WRF files for {valid}")
 
-    with xr.open_mfdataset([str(p) for p in hourly]) as raw:
+    raw = concat_netcdf(hourly)
+    try:
         data = wrf_add_vapor(wrf_add_radiation(raw))
         means = hourly_to_daily(data, {"magViento10", "PSFC", "T2", "HR2", "pres_vap_real"}, "mean").isel(time=0)
         sums = hourly_to_daily(data, {"Rn", "G"}, "sum").isel(time=0)
         mins = hourly_to_daily(data, {"T2"}, "min").isel(time=0)
         maxs = hourly_to_daily(data, {"T2"}, "max").isel(time=0)
         pp = data["PP"][-1, ...]
+    finally:
+        raw.close()
 
     with xr.open_dataset(daily24) as t00:
         mins["Tmin"] = xr.DataArray(
@@ -105,7 +109,7 @@ async def run_wrf(
     status: dict[date, str] = {}
     for valid in targets:
         try:
-            init = download_valid_day(valid, cfg.down_dir, init=today)
+            init = download_valid_day(valid, cfg.down_dir, as_of=today, workers=cfg.fetch_workers)
             hourly_keys, daily_key = remote_keys(valid, init)
             for key in [*hourly_keys, daily_key]:
                 raw = cfg.down_dir / Path(key).name

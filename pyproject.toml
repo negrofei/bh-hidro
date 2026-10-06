@@ -13,6 +13,7 @@ dependencies = [
     "pydantic-settings>=2.2",
     "sqlalchemy[asyncio]>=2.0",
     "aiomysql>=0.2",
+    "cryptography>=42.0",
     "python-dotenv>=1.0",
     "pandas>=2.2",
     "geoalchemy2>=0.14",

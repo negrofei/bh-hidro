@@ -23,8 +23,13 @@ def _to_geojson_geom(value):
     return json.loads(to_geojson(wkb.loads(payload)))
 
 
+def layer_name(variable: str, fecha: date, crop: str, resolution: str = "0p1") -> str:
+    """Tileserver id: agua-util_2026-09-08_S1_0p1."""
+    return f"{variable.replace('_', '-')}_{fecha.isoformat()}_{crop}_{resolution}"
+
+
 def geojson_name(out_dir: Path, variable: str, fecha: date, crop: str) -> Path:
-    return out_dir / f"{variable}_{fecha.strftime('%Y%m%d')}_{crop}_0p1.geojson"
+    return out_dir / f"{layer_name(variable, fecha, crop)}.geojson"
 
 
 async def features_for_date(

@@ -35,6 +35,7 @@ async def run_output(
             return {"output": {d: "dry-run" for d in dates}}
         raise
 
+    logger.info("Starting output workflow %s..%s variable=%s", cfg.start, cfg.end, cfg.variable)
     out: dict[str, dict[date, str]] = {}
     for _, crop in crops.iterrows():
         crop_id = int(crop["id_cultivo_general"])
@@ -45,8 +46,10 @@ async def run_output(
                 out[code][fecha] = "dry-run"
                 continue
             try:
+                logger.info("Generating %s for crop %s on %s", cfg.variable, code, fecha)
                 features = await features_for_date(fecha, crop_id, provinces, cfg.variable)
                 if not features:
+                    logger.warning("No balance features for crop %s %s; skip", code, fecha)
                     out[code][fecha] = "skip"
                     continue
                 path = geojson_name(cfg.out_dir, cfg.variable, fecha, code)
@@ -54,6 +57,7 @@ async def run_output(
                 tiles = geojson_to_mbtiles(path, cfg.tiles_dir, cfg.min_zoom, cfg.max_zoom)
                 out[code][fecha] = "ok" if tiles else f"geojson:{path.name}"
             except Exception as exc:
-                logger.error("output %s %s failed: %s", code, fecha, exc)
+                logger.exception("output %s %s failed: %s", code, fecha, exc)
                 out[code][fecha] = "ERROR"
+    logger.info("Output workflow finish")
     return out

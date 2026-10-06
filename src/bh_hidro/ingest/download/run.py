@@ -1,4 +1,4 @@
-"""Sequential ERALand then WRF. No thread circus, no ERA5/GFS."""
+"""Sequential ERALand → WRF → GFS. Downloads use threads; CDO/MySQL stay serial."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from datetime import date
 
 from bh_hidro.config import Settings, get_settings
 from bh_hidro.ingest.download.eraland import run_eraland
+from bh_hidro.ingest.download.gfs import run_gfs
 from bh_hidro.ingest.download.ini import DownloadIni
 from bh_hidro.ingest.download.wrf import run_wrf
 
@@ -31,4 +32,25 @@ async def run_download(
     if cfg.wrf:
         extra = eraland_errors if cfg.eraland else []
         out["wrf"] = await run_wrf(cfg, today=today, extra=extra, dry_run=dry_run)
+    if cfg.gfs:
+        wrf_status = out.get("wrf", {})
+        wrf_ok = [d for d, status in wrf_status.items() if status == "Listo"]
+        wrf_err = [d for d, status in wrf_status.items() if status == "ERROR"]
+        exclude = list(wrf_ok)
+        if cfg.wrf:
+            try:
+                from bh_hidro.db.models.atmospheric import WRF0p1
+                from bh_hidro.db.models.geographic import Provincia
+
+                ids = await Provincia.ids_by_names(cfg.provinces)
+                exclude.extend(await WRF0p1.dates_for_provinces(ids))
+            except Exception as exc:
+                logger.warning("Could not read WRF dates to exclude from GFS (%s)", exc)
+        out["gfs"] = await run_gfs(
+            cfg,
+            today=today,
+            exclude=exclude,
+            extra=wrf_err,
+            dry_run=dry_run,
+        )
     return out

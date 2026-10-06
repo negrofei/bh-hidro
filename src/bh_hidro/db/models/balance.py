@@ -51,9 +51,13 @@ class BalanceHidricoMerge0p1(Base, ProvinceScoped):
         id_provincia: int,
         fecha_desde: date | None = None,
     ):
-        stmt = select(cls.__table__.c.fecha.distinct()).where(
-            cls.id_provincia == id_provincia,
-            cls.id_cultivo_general == id_cultivo_general,
+        stmt = (
+            select(cls.__table__.c.fecha.label("fecha"))
+            .where(
+                cls.id_provincia == id_provincia,
+                cls.id_cultivo_general == id_cultivo_general,
+            )
+            .distinct()
         )
         if fecha_desde is not None:
             stmt = stmt.where(cls.fecha >= fecha_desde)

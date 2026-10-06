@@ -21,8 +21,18 @@ class BalanceIni:
     start: date
     end: date
     chunk_size: int
+    paralelo: bool
+    workers: int
+    raise_if_data_gap: bool
+    first_day: date
     precip_priority: list[str]
     etp_priority: list[str]
+
+    @property
+    def fetch_workers(self) -> int:
+        from bh_hidro.ingest.pool import fetch_workers
+
+        return fetch_workers(self.paralelo, self.workers)
 
     @classmethod
     def load(
@@ -62,6 +72,11 @@ class BalanceIni:
             start=start,
             end=end,
             chunk_size=parser.getint("run", "chunks_formi", fallback=10000),
+            paralelo=parser.getboolean("run", "paralelo", fallback=True),
+            workers=parser.getint("run", "workers", fallback=7),
+            # True (default): refuse days without yesterday. False: continue from last loaded.
+            raise_if_data_gap=parser.getboolean("run", "raise_if_data_gap", fallback=True),
+            first_day=settings.first_day,
             precip_priority=parse_priority(
                 parser.get("data_providers", "precipitation_priority_0p1", fallback=None),
                 PRECIP_PRIORITY,

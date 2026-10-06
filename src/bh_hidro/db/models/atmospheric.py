@@ -1,4 +1,4 @@
-"""Atmospheric daily series on the 0.1° land grid. ERA5 / GFS stay out."""
+"""Atmospheric daily series on the 0.1° land grid. ERA5 / GFS0p25 stay out."""
 
 from __future__ import annotations
 
@@ -39,14 +39,33 @@ class WRF0p1(Base, GridLinked):
     async def dates_loaded_day0(cls, provincias: list[int]) -> pd.DataFrame:
         nodes = await cls.association().read_by_provincias(provincias)
         return await cls.fetch_df(
-            select(cls.__table__.c.fecha.distinct()).where(
+            select(cls.__table__.c.fecha.label("fecha"))
+            .where(
                 cls.id_nodo.in_(nodes["id_nodo"].tolist()),
                 cls.day_prono == 0,
             )
+            .distinct()
         )
 
     def __repr__(self) -> str:
         return f"WRF0p1(nodo={self.id_nodo}, fecha={self.fecha})"
+
+
+class GFS0p1(Base, GridLinked):
+    """GFS 0.1° on the land grid. Fills precip/ETP after WRF."""
+
+    __tablename__ = "gfs0p1"
+
+    id_nodo = Column(Integer, ForeignKey("reticula_land.id_nodo"), primary_key=True)
+    fecha = Column(Date, primary_key=True)
+    t2m_min = Column(Numeric(9, 6), nullable=False)
+    t2m_max = Column(Numeric(9, 6), nullable=False)
+    tp = Column(Numeric(9, 6), nullable=False)
+    etp = Column(Numeric(9, 7), nullable=False)
+    day_prono = Column(Integer, nullable=False)
+
+    def __repr__(self) -> str:
+        return f"GFS0p1(nodo={self.id_nodo}, fecha={self.fecha})"
 
 
 class Imerg0p1(Base, GridLinked):
@@ -64,9 +83,9 @@ class Imerg0p1(Base, GridLinked):
     @classmethod
     async def dates_loaded(cls, date_ini: str, date_fin: str) -> pd.DataFrame:
         return await cls.fetch_df(
-            select(cls.__table__.c.fecha.distinct(), cls.id_origen).where(
-                cls.fecha.between(date_ini, date_fin)
-            )
+            select(cls.__table__.c.fecha.label("fecha"), cls.id_origen)
+            .where(cls.fecha.between(date_ini, date_fin))
+            .distinct()
         )
 
     def __repr__(self) -> str:
@@ -101,9 +120,9 @@ class ImergNative(Base, GridLinked):
     @classmethod
     async def dates_loaded(cls, date_ini: str, date_fin: str) -> pd.DataFrame:
         return await cls.fetch_df(
-            select(cls.__table__.c.fecha.distinct(), cls.id_origen).where(
-                cls.fecha.between(date_ini, date_fin)
-            )
+            select(cls.__table__.c.fecha.label("fecha"), cls.id_origen)
+            .where(cls.fecha.between(date_ini, date_fin))
+            .distinct()
         )
 
     @classmethod

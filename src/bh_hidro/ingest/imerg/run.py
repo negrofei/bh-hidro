@@ -1,4 +1,4 @@
-"""Sequential IMERG Late then Early onto the land grid. Calib is weekly FTP."""
+"""IMERG Late then Early onto the land grid. HTTP/FTP use threads; CDO/MySQL stay serial."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from bh_hidro.ingest.imerg.ini import ImergIni
 from bh_hidro.ingest.imerg.origins import DAILY_ORDER, ORIGIN, better_or_equal_already
 from bh_hidro.ingest.imerg.pluvio import EXPECTED_3HR, filter_trihorario
 from bh_hidro.ingest.imerg.remap import CALIB_GRID
+from bh_hidro.ingest.pool import map_threads
 
 logger = logging.getLogger(__name__)
 
@@ -47,21 +48,34 @@ async def loaded_origins(start: date, end: date) -> dict[date, int]:
         return {}
 
 
-def ingest_one(cfg: ImergIni, fecha: date, latency: str, settings: Settings) -> None:
+def fetch_one(cfg: ImergIni, fecha: date, latency: str, settings: Settings) -> Path:
     from bh_hidro.ingest.imerg.geotiff import tifs_to_daily
     from bh_hidro.ingest.imerg.http import download_files, list_remote
-    from bh_hidro.ingest.imerg.remap import remap_imerg_to_land
 
     remotes = list_remote(latency, fecha, settings=settings)
     wanted = filter_trihorario(fecha, remotes, latency)
     if len(wanted) != EXPECTED_3HR:
         raise FileNotFoundError(f"{latency} {fecha}: {len(wanted)}/{EXPECTED_3HR} 3h files")
 
-    tifs = download_files(wanted, latency, cfg.down_dir, overwrite=cfg.overwrite, settings=settings)
+    tifs = download_files(
+        wanted,
+        latency,
+        cfg.down_dir,
+        overwrite=cfg.overwrite,
+        settings=settings,
+        workers=cfg.fetch_workers,
+    )
     raw = daily_nc(cfg.down_dir, fecha, latency)
     if not raw.is_file() or cfg.overwrite:
         daily = tifs_to_daily(tifs, fecha, latency)
         daily.to_netcdf(raw)
+    return raw
+
+
+def ingest_one(cfg: ImergIni, fecha: date, latency: str, settings: Settings) -> None:
+    from bh_hidro.ingest.imerg.remap import remap_imerg_to_land
+
+    raw = fetch_one(cfg, fecha, latency, settings)
     dest = land_nc(cfg.down_dir, fecha, latency)
     remap_imerg_to_land(raw, dest, overwrite=cfg.overwrite)
 
@@ -102,7 +116,7 @@ async def run_imerg_calib(
     dry_run: bool,
     today: date,
 ) -> dict[str, dict[date, str]]:
-    from bh_hidro.ingest.imerg.ftp import filename, list_remote
+    from bh_hidro.ingest.imerg.ftp import download_ajuste, filename, list_remote
 
     wanted = clip_imerg(cfg.start, cfg.end, today)
     already = await loaded_origins(cfg.start, cfg.end) if wanted else {}
@@ -112,6 +126,7 @@ async def run_imerg_calib(
     if wanted and not dry_run:
         available = list_remote(settings)
     out: dict[str, dict[date, str]] = {"calib": {}}
+    need: list[date] = []
     for fecha in wanted:
         if better_or_equal_already(already.get(fecha), origin):
             out["calib"][fecha] = "skip"
@@ -121,6 +136,20 @@ async def run_imerg_calib(
             continue
         if filename(fecha) not in available:
             out["calib"][fecha] = "missing"
+            continue
+        need.append(fecha)
+    if need:
+        for fecha, _path, err in map_threads(
+            lambda f: download_ajuste(f, cfg.down_dir, overwrite=cfg.overwrite, settings=settings),
+            need,
+            cfg.fetch_workers,
+            desc="IMERG-Calib-FTP",
+        ):
+            if err is not None:
+                logger.warning("IMERG calib %s missing: %s", fecha, err)
+                out["calib"][fecha] = "missing"
+    for fecha in need:
+        if out["calib"].get(fecha) == "missing":
             continue
         try:
             ingest_calib_one(cfg, fecha, settings, available)
@@ -181,7 +210,10 @@ async def run_imerg(
                 rows = await upsert_one(cfg, fecha, latency)
                 out[latency][fecha] = f"ok:{rows}"
                 done.add(fecha)
+            except FileNotFoundError as exc:
+                logger.warning("IMERG %s %s missing: %s", latency, fecha, exc)
+                out[latency][fecha] = "missing"
             except Exception as exc:
-                logger.error("IMERG %s %s failed: %s", latency, fecha, exc)
+                logger.exception("IMERG %s %s failed: %s", latency, fecha, exc)
                 out[latency][fecha] = "ERROR"
     return out

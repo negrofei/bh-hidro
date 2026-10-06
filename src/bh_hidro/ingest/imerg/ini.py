@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
-from bh_hidro.config import Settings, get_settings
+from bh_hidro.config import Settings, get_settings, host_path
 from bh_hidro.ingest.download.windows import operative_window
 
 
@@ -23,6 +23,14 @@ class ImergIni:
     start: date
     end: date
     chunk_size: int
+    paralelo: bool
+    workers: int
+
+    @property
+    def fetch_workers(self) -> int:
+        from bh_hidro.ingest.pool import fetch_workers
+
+        return fetch_workers(self.paralelo, self.workers)
 
     @classmethod
     def load(
@@ -52,12 +60,8 @@ class ImergIni:
                 start = start or datetime.strptime(parser.get("fechas", "fechaini"), "%Y%m%d").date()
                 end = end or datetime.strptime(parser.get("fechas", "fechafin"), "%Y%m%d").date()
 
-        down_dir = Path(parser.get("directorios", "down_dir", fallback=str(settings.down_dir)))
-        try:
-            down_dir.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            down_dir = Path(settings.down_dir)
-            down_dir.mkdir(parents=True, exist_ok=True)
+        down_dir = host_path(Path(parser.get("directorios", "down_dir", fallback=str(settings.down_dir))))
+        down_dir.mkdir(parents=True, exist_ok=True)
 
         return cls(
             path=path,
@@ -70,4 +74,6 @@ class ImergIni:
             start=start,
             end=end,
             chunk_size=parser.getint("database", "chunk_size", fallback=5000),
+            paralelo=parser.getboolean("run", "paralelo", fallback=True),
+            workers=parser.getint("run", "workers", fallback=4),
         )

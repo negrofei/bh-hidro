@@ -81,14 +81,15 @@ def download_files(
     outdir: Path,
     overwrite: bool = False,
     settings: Settings | None = None,
+    workers: int = 1,
 ) -> list[Path]:
-    session = _session(settings)
-    saved: list[Path] = []
-    for remote in remote_paths:
+    from bh_hidro.ingest.pool import first_error, map_threads
+
+    def one(remote: str) -> Path:
         dest = outdir / Path(remote).name
         if dest.is_file() and not overwrite:
-            saved.append(dest)
-            continue
+            return dest
+        session = _session(settings)
         url = f"{SERVERS[latency]}/{remote.lstrip('/')}"
         logger.info("IMERG get %s", url)
         response = session.get(url, stream=True, timeout=120)
@@ -96,5 +97,10 @@ def download_files(
         with dest.open("wb") as handle:
             for chunk in response.iter_content(chunk_size=8192):
                 handle.write(chunk)
-        saved.append(dest)
-    return saved
+        return dest
+
+    rows = map_threads(one, remote_paths, workers, desc=f"IMERG-{latency}")
+    err = first_error(rows)
+    if err is not None:
+        raise err
+    return [path for _remote, path, _err in rows if path is not None]

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
-from bh_hidro.config import Settings, get_settings
+from bh_hidro.config import Settings, get_settings, host_path
 from bh_hidro.ingest.download.windows import operative_window
 
 
@@ -20,12 +20,21 @@ class DownloadIni:
     operativo: bool
     eraland: bool
     wrf: bool
+    gfs: bool
     provinces: list[str]
     start: date
     end: date
     max_tries: int
     chunk_size: int
     erase: bool
+    paralelo: bool
+    workers: int
+
+    @property
+    def fetch_workers(self) -> int:
+        from bh_hidro.ingest.pool import fetch_workers
+
+        return fetch_workers(self.paralelo, self.workers)
 
     @classmethod
     def load(
@@ -57,18 +66,10 @@ class DownloadIni:
                 end = end or datetime.strptime(parser.get("fechas", "fechafin"), "%Y%m%d").date()
 
         provinces = [p.strip() for p in parser.get("region", "provincias").split("|") if p.strip()]
-        down_dir = Path(parser.get("directorios", "down_dir", fallback=str(settings.down_dir)))
-        log_dir = Path(parser.get("directorios", "log_dir", fallback=str(settings.log_dir)))
-        try:
-            down_dir.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            down_dir = Path(settings.down_dir)
-            down_dir.mkdir(parents=True, exist_ok=True)
-        try:
-            log_dir.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            log_dir = Path(settings.log_dir)
-            log_dir.mkdir(parents=True, exist_ok=True)
+        down_dir = host_path(Path(parser.get("directorios", "down_dir", fallback=str(settings.down_dir))))
+        log_dir = host_path(Path(parser.get("directorios", "log_dir", fallback=str(settings.log_dir))))
+        down_dir.mkdir(parents=True, exist_ok=True)
+        log_dir.mkdir(parents=True, exist_ok=True)
 
         return cls(
             path=path,
@@ -78,10 +79,13 @@ class DownloadIni:
             operativo=operativo,
             eraland=parser.getboolean("productos", "eraland", fallback=True),
             wrf=parser.getboolean("productos", "wrf", fallback=True),
+            gfs=parser.getboolean("productos", "gfs", fallback=False),
             provinces=provinces,
             start=start,
             end=end,
             max_tries=parser.getint("run", "max_tries", fallback=1),
             chunk_size=parser.getint("run", "database_chunk_size", fallback=10000),
             erase=parser.getboolean("run", "erase", fallback=True),
+            paralelo=parser.getboolean("run", "paralelo", fallback=True),
+            workers=parser.getint("run", "workers", fallback=4),
         )

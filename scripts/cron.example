@@ -1,10 +1,10 @@
 # Crontab examples. Adjust paths. Do not run against fdc_database.
 #
-# Daily pipeline inside the app container (after bootstrap):
-# 15 7 * * * docker exec bh-hidro-app bh-hidro run >> /home/mfeijo/bh-hidro/logs/cron-daily.log 2>&1
+# Daily pipeline inside the app container (download → imerg → balance → GeoJSON → MBTiles → config.json):
+# 15 7 * * * docker exec bh-hidro-app /app/scripts/run.sh >> /home/mfeijo/bh-hidro/logs/cron-daily.log 2>&1
 #
-# Or from the host venv against 127.0.0.1:3308:
-# 15 7 * * * . /home/mfeijo/bh-hidro/.venv/bin/activate && cd /home/mfeijo/bh-hidro && bh-hidro run >> logs/cron-daily.log 2>&1
+# Or from the host venv against 127.0.0.1:3308 (needs tippecanoe on PATH for tiles):
+# 15 7 * * * /home/mfeijo/bh-hidro/scripts/run.sh >> /home/mfeijo/bh-hidro/logs/cron-daily.log 2>&1
 #
 # Weekly Calib (Monday) then operativo dump:
 # 15 8 * * 1 docker exec bh-hidro-app bh-hidro imerg --calib >> /home/mfeijo/bh-hidro/logs/cron-weekly.log 2>&1

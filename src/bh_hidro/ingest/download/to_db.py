@@ -8,7 +8,7 @@ from datetime import date, timedelta
 import pandas as pd
 import xarray as xr
 
-from bh_hidro.db.models.atmospheric import DatoERALand, Imerg0p1, WRF0p1
+from bh_hidro.db.models.atmospheric import DatoERALand, GFS0p1, Imerg0p1, WRF0p1
 from bh_hidro.db.models.grids import ReticulaLand
 
 logger = logging.getLogger(__name__)
@@ -62,6 +62,20 @@ async def upsert_wrf(ds: xr.Dataset, chunk: int = 10000, today: date | None = No
         await session.commit()
     df = keep_table_columns(await attach_nodos(dataset_to_frame(ds)), WRF0p1)
     await WRF0p1.upsert_df(df, chunk_size=chunk)
+    return len(df)
+
+
+async def upsert_gfs(ds: xr.Dataset, chunk: int = 10000, today: date | None = None) -> int:
+    cutoff = (today or date.today()) - timedelta(days=7)
+    from sqlalchemy import text
+
+    from bh_hidro.db.session import get_session
+
+    async with get_session() as session:
+        await session.execute(text("DELETE FROM gfs0p1 WHERE fecha <= :cutoff"), {"cutoff": cutoff})
+        await session.commit()
+    df = keep_table_columns(await attach_nodos(dataset_to_frame(ds)), GFS0p1)
+    await GFS0p1.upsert_df(df, chunk_size=chunk)
     return len(df)
 
 

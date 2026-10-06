@@ -27,6 +27,7 @@ REFERENCE_TABLES = [
 OPERATIVE_TABLES = [
     "datos_eraland",
     "wrf0p1",
+    "gfs0p1",
     "imerg0p1",
     "imerg",
     "balance_hidrico_merge0p1",

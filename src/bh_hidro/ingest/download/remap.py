@@ -1,9 +1,11 @@
-"""CDO remap onto the 0.1° land grid."""
+"""CDO remap onto the 0.1° land grid. One CDO at a time."""
 
 from __future__ import annotations
 
 import logging
 from pathlib import Path
+
+from bh_hidro.ingest.pool import CDO_LOCK
 
 logger = logging.getLogger(__name__)
 
@@ -19,16 +21,17 @@ def remap_to_land(src: Path, dest: Path, method: str = "remapdis") -> Path:
 
     from cdo import Cdo
 
-    cdo = Cdo()
-    tmp = dest.with_stem(dest.stem + "_gridfix")
-    griddes = [line.replace("gridtype  = generic", "gridtype  = latlon") for line in cdo.griddes(input=str(src))]
-    gridfile = dest.parent / "tmp_griddes.txt"
-    gridfile.write_text("\n".join(line.rstrip() for line in griddes) + "\n")
-    getattr(cdo, "remapdis")(str(gridfile), input=str(src), output=str(tmp))
-    remap = getattr(cdo, method)
-    remap(str(LAND_GRID), input=str(tmp), output=str(dest))
-    tmp.unlink(missing_ok=True)
-    gridfile.unlink(missing_ok=True)
+    with CDO_LOCK:
+        cdo = Cdo()
+        tmp = dest.with_stem(dest.stem + "_gridfix")
+        griddes = [line.replace("gridtype  = generic", "gridtype  = latlon") for line in cdo.griddes(input=str(src))]
+        gridfile = dest.parent / "tmp_griddes.txt"
+        gridfile.write_text("\n".join(line.rstrip() for line in griddes) + "\n")
+        getattr(cdo, "remapdis")(str(gridfile), input=str(src), output=str(tmp))
+        remap = getattr(cdo, method)
+        remap(str(LAND_GRID), input=str(tmp), output=str(dest))
+        tmp.unlink(missing_ok=True)
+        gridfile.unlink(missing_ok=True)
     logger.info("remapped %s", dest.name)
     return dest
 
@@ -40,5 +43,6 @@ def remap_bil_to_land(src: Path, dest: Path) -> Path:
         raise FileNotFoundError(LAND_GRID)
     from cdo import Cdo
 
-    Cdo().remapbil(str(LAND_GRID), input=str(src), output=str(dest))
+    with CDO_LOCK:
+        Cdo().remapbil(str(LAND_GRID), input=str(src), output=str(dest))
     return dest

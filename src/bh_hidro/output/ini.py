@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
-from bh_hidro.config import Settings, get_settings
+from bh_hidro.config import Settings, get_settings, host_path
 from bh_hidro.ingest.download.windows import operative_window
 
 
@@ -53,13 +53,9 @@ class OutputIni:
             else:
                 start = start or datetime.strptime(parser.get("fechas", "fechaini"), "%Y%m%d").date()
                 end = end or datetime.strptime(parser.get("fechas", "fechafin"), "%Y%m%d").date()
-        out_dir = Path(parser.get("directorios", "out_dir", fallback=str(settings.out_dir)))
-        try:
-            out_dir.mkdir(parents=True, exist_ok=True)
-        except OSError:
-            out_dir = Path(settings.out_dir)
-            out_dir.mkdir(parents=True, exist_ok=True)
-        tiles_dir = out_dir / "tiles"
+        out_dir = host_path(Path(parser.get("directorios", "out_dir", fallback=str(settings.out_dir))))
+        out_dir.mkdir(parents=True, exist_ok=True)
+        tiles_dir = out_dir / "tmp"
         tiles_dir.mkdir(parents=True, exist_ok=True)
         crops_raw = parser.get("balance_hidrico", "cultivos", fallback="all")
         return cls(

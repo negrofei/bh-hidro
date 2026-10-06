@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 
 from bh_hidro.ingest.download.remap import LAND_GRID
+from bh_hidro.ingest.pool import CDO_LOCK
 
 logger = logging.getLogger(__name__)
 
@@ -34,15 +35,16 @@ def remap_imerg_to_land(
 
     cdo = Cdo()
     tmp = dest.with_stem(f"tmp_imerg_{src.stem}")
-    try:
-        cdo.remapdis(str(grid), input=str(src), output=str(tmp))
-        if not tmp.is_file() or tmp.stat().st_size < 1024:
-            raise RuntimeError(f"IMERG grid remap produced empty file: {tmp}")
-        if dest.is_file():
-            dest.unlink()
-        cdo.remapdis(str(LAND_GRID), input=str(tmp), output=str(dest))
-    finally:
-        tmp.unlink(missing_ok=True)
+    with CDO_LOCK:
+        try:
+            cdo.remapdis(str(grid), input=str(src), output=str(tmp))
+            if not tmp.is_file() or tmp.stat().st_size < 1024:
+                raise RuntimeError(f"IMERG grid remap produced empty file: {tmp}")
+            if dest.is_file():
+                dest.unlink()
+            cdo.remapdis(str(LAND_GRID), input=str(tmp), output=str(dest))
+        finally:
+            tmp.unlink(missing_ok=True)
     if not dest.is_file() or dest.stat().st_size < 1024:
         raise RuntimeError(f"land remap produced empty file: {dest}")
     logger.info("remapped %s", dest.name)

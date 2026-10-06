@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from bh_hidro.ingest.pool import CDO_LOCK
+
 logger = logging.getLogger(__name__)
 
 GRIB_TO_NC = {
@@ -31,12 +33,13 @@ def grib_to_netcdf(grib_file: Path) -> Path:
 
     from cdo import Cdo
 
-    cdo = Cdo()
-    renamed = outfile.with_name(outfile.stem + "_renamed.nc")
-    cdo.copy(input=str(grib_file), output=str(outfile), options="-f nc")
-    pairs = ",".join(f"{k},{v}" for k, v in GRIB_TO_NC.items())
-    cdo.chname(pairs, input=str(outfile), output=str(renamed))
-    outfile.unlink()
-    renamed.rename(outfile)
+    with CDO_LOCK:
+        cdo = Cdo()
+        renamed = outfile.with_name(outfile.stem + "_renamed.nc")
+        cdo.copy(input=str(grib_file), output=str(outfile), options="-f nc")
+        pairs = ",".join(f"{k},{v}" for k, v in GRIB_TO_NC.items())
+        cdo.chname(pairs, input=str(outfile), output=str(renamed))
+        outfile.unlink()
+        renamed.rename(outfile)
     logger.info("converted %s", outfile.name)
     return outfile

@@ -39,18 +39,21 @@ services:
     environment:
       DATABASE_HOST: db
       DATABASE_PORT: 3306
+      LOG_DIR: /logs
+      DOWN_DIR: /descargas
+      OUT_DIR: /output
     volumes:
       - ./src:/app/src
       - ./configs:/app/configs
       - ./scripts:/app/scripts
       - descargas:/descargas
-      - logs:/logs
+      - ./logs:/logs
       - output:/output
+      - ${TILES_HOST_DIR:-./output/tiles}:/output/tiles
     restart: unless-stopped
     command: ["tail", "-f", "/dev/null"]
 
 volumes:
   db_data:
   descargas:
-  logs:
   output:

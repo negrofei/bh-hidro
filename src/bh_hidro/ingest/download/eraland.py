@@ -14,7 +14,8 @@ from bh_hidro.ingest.download.grib import grib_to_netcdf
 from bh_hidro.ingest.download.ini import DownloadIni
 from bh_hidro.ingest.download.remap import remap_to_land
 from bh_hidro.ingest.download.to_db import upsert_eraland
-from bh_hidro.ingest.download.windows import clip_eraland, daterange, support_dates
+from bh_hidro.ingest.download.windows import LAG_REANALYSIS, clip_eraland, daterange, support_dates
+from bh_hidro.ingest.pool import map_threads
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,14 @@ def nc_path(down_dir: Path, fecha: date) -> Path:
 
 async def dates_missing(cfg: DownloadIni, today: date) -> tuple[list[date], list[date]]:
     start, end = clip_eraland(cfg.start, cfg.end, today)
+    if start > end:
+        logger.info(
+            "ERALand skipped: requested %s–%s is after last reanalysis %s",
+            cfg.start,
+            cfg.end,
+            today - LAG_REANALYSIS,
+        )
+        return [], []
     wanted = set(daterange(start, end))
     try:
         from bh_hidro.db.models.atmospheric import DatoERALand
@@ -46,6 +55,10 @@ async def dates_missing(cfg: DownloadIni, today: date) -> tuple[list[date], list
 def fetch_and_convert(down_dir: Path, fecha: date) -> Path:
     grib = download_eraland_grib(fecha, grib_path(down_dir, fecha))
     return grib_to_netcdf(grib)
+
+
+def fetch_grib(down_dir: Path, fecha: date) -> Path:
+    return download_eraland_grib(fecha, grib_path(down_dir, fecha))
 
 
 def build_daily(down_dir: Path, fecha: date) -> Path:
@@ -75,12 +88,23 @@ async def run_eraland(cfg: DownloadIni, today: date | None = None, dry_run: bool
         return {}
 
     status: dict[date, str] = {}
-    for fecha in all_dates:
+    workers = cfg.fetch_workers
+    fetched = map_threads(
+        lambda fecha: fetch_grib(cfg.down_dir, fecha),
+        all_dates,
+        workers,
+        desc="ERALand-CDS",
+    )
+    for fecha, _grib, err in fetched:
+        if err is not None:
+            logger.error("ERALand fetch %s: %s", fecha, err)
+            status[fecha] = "ERROR"
+            continue
         try:
-            fetch_and_convert(cfg.down_dir, fecha)
+            grib_to_netcdf(grib_path(cfg.down_dir, fecha))
             status[fecha] = "downloaded"
         except Exception as exc:
-            logger.error("ERALand fetch %s: %s", fecha, exc)
+            logger.error("ERALand convert %s: %s", fecha, exc)
             status[fecha] = "ERROR"
 
     ok: list[date] = []

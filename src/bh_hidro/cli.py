@@ -7,7 +7,7 @@ import sys
 
 from bh_hidro import __version__
 from bh_hidro.config import get_settings
-from bh_hidro.log import setup_logging
+from bh_hidro.log import STEP_LOG_NAMES, setup_logging
 
 _NOT_READY = "Módulo aún no transferido desde bhERA5."
 
@@ -65,11 +65,19 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     settings = get_settings()
-    logger = setup_logging(settings.log_dir, level=args.logmode)
 
     if args.command is None:
         parser.print_help()
         return 0
+
+    if args.command == "run":
+        return _cmd_run(args, settings)
+
+    logger = setup_logging(
+        settings.log_dir,
+        level=args.logmode,
+        logbasename=_log_basename(args),
+    )
 
     if args.command == "status":
         return _cmd_status(logger, settings)
@@ -88,9 +96,6 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "output":
         return _cmd_output(args, settings)
-
-    if args.command == "run":
-        return _cmd_run(args, settings)
 
     logger.info("%s: %s", args.command, _NOT_READY)
     print(_NOT_READY, file=sys.stderr)
@@ -122,15 +127,19 @@ def _cmd_bootstrap(args, settings) -> int:
 
     from bh_hidro.db.bootstrap import run_bootstrap
 
-    result = asyncio.run(
-        run_bootstrap(
-            settings=settings,
-            from_mysql=args.from_mysql,
-            create=args.create_schema,
-            force=args.force,
-            dry_run=args.dry_run,
+    try:
+        result = asyncio.run(
+            run_bootstrap(
+                settings=settings,
+                from_mysql=args.from_mysql,
+                create=args.create_schema,
+                force=args.force,
+                dry_run=args.dry_run,
+            )
         )
-    )
+    except Exception as exc:
+        print(f"bootstrap failed: {exc}", file=sys.stderr)
+        return 1
     print(f"source: {settings.source_database_name} -> dest: {settings.database_name}")
     for table, n in result.copied.items():
         print(f"  copy {table}: {n} rows")
@@ -153,6 +162,12 @@ async def _ping_mysql(settings) -> None:
     await dispose_engine()
 
 
+def _log_basename(args) -> str:
+    if getattr(args, "command", None) == "imerg" and getattr(args, "calib", False):
+        return "reportes_weekly"
+    return STEP_LOG_NAMES.get(args.command or "", "bh_hidro")
+
+
 def _parse_ymd(value: str | None):
     if not value:
         return None
@@ -171,13 +186,7 @@ def _cmd_download(args, settings) -> int:
     results = asyncio.run(
         run_download(settings=settings, start=start, end=end, dry_run=args.dry_run)
     )
-    for product, dates in results.items():
-        print(f"{product}: {len(dates)} dates")
-        for fecha, status in sorted(dates.items()):
-            print(f"  {fecha} {status}")
-    if any(status == "ERROR" for dates in results.values() for status in dates.values()):
-        return 1
-    return 0
+    return _print_results(results)
 
 
 def _cmd_imerg(args, settings) -> int:
@@ -196,13 +205,7 @@ def _cmd_imerg(args, settings) -> int:
             calib=getattr(args, "calib", False),
         )
     )
-    for product, dates in results.items():
-        print(f"{product}: {len(dates)} dates")
-        for fecha, status in sorted(dates.items()):
-            print(f"  {fecha} {status}")
-    if any(status == "ERROR" for dates in results.values() for status in dates.values()):
-        return 1
-    return 0
+    return _print_results(results)
 
 
 def _print_results(results: dict) -> int:
@@ -210,9 +213,22 @@ def _print_results(results: dict) -> int:
         print(f"{product}: {len(dates)} dates")
         for fecha, status in sorted(dates.items()):
             print(f"  {fecha} {status}")
-    if any(status == "ERROR" for dates in results.values() for status in dates.values()):
+    if _uncovered_errors(results):
         return 1
     return 0
+
+
+def _uncovered_errors(results: dict) -> bool:
+    """Fail only if a date is ERROR and no product ingested or skipped it."""
+    covered: set = set()
+    errors: set = set()
+    for dates in results.values():
+        for fecha, status in dates.items():
+            if status == "ERROR":
+                errors.add(fecha)
+            elif isinstance(status, str) and (status.startswith("ok") or status in {"skip", "dry-run"}):
+                covered.add(fecha)
+    return bool(errors - covered)
 
 
 def _cmd_balance(args, settings) -> int:
@@ -223,7 +239,7 @@ def _cmd_balance(args, settings) -> int:
     start = _parse_ymd(args.start_date)
     end = _parse_ymd(args.end_date)
     results = asyncio.run(
-        run_balance(settings=settings, start=start, end=end, dry_run=args.dry_run)
+        run_balance(settings=settings, start=start, end=end, dry_run=args.dry_run, logmode=args.logmode)
     )
     return _print_results(results)
 
@@ -242,12 +258,16 @@ def _cmd_output(args, settings) -> int:
 
 
 def _cmd_run(args, settings) -> int:
-    codes = [
-        _cmd_download(args, settings),
-        _cmd_imerg(args, settings),
-        _cmd_balance(args, settings),
-        _cmd_output(args, settings),
-    ]
+    steps = (
+        ("descarga", _cmd_download),
+        ("reportes", _cmd_imerg),
+        ("balance", _cmd_balance),
+        ("output", _cmd_output),
+    )
+    codes = []
+    for basename, fn in steps:
+        setup_logging(settings.log_dir, level=args.logmode, logbasename=basename)
+        codes.append(fn(args, settings))
     if 1 in codes:
         return 1
     return 0

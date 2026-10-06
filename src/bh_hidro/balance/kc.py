@@ -54,6 +54,8 @@ class CalendarKc(KcStrategy):
         else:
             nombre_cultivo = nombre_cultivos.get(id_tipo_cultivo[0], str(id_tipo_cultivo[0]))
 
+        logger.debug("Calculating KC for crop type %s:%s, pattern=%s", id_tipo_cultivo, nombre_cultivo, patron)
+
         if isinstance(patron, int):
             patron2 = pd.DataFrame([patron], columns=["id_patron"])
         else:
@@ -63,11 +65,13 @@ class CalendarKc(KcStrategy):
         df_etapa_patron = pd.merge(reletapapatron, patron2, on="id_patron", how="inner")
 
         if isinstance(id_tipo_cultivo, int):
-            pass
+            logger.debug("Crop %s:%s is simple", id_tipo_cultivo, nombre_cultivo)
         elif len(id_tipo_cultivo) > 1:
+            logger.debug("Crop %s:%s is rotational", id_tipo_cultivo, nombre_cultivo)
             df_fenologia = df_fenologia[df_fenologia.id_tipo_cultivo.isin(id_tipo_cultivo)]
         elif len(id_tipo_cultivo) == 1:
             id_tipo_cultivo = id_tipo_cultivo[0]
+            logger.debug("Crop %s:%s is simple", id_tipo_cultivo, nombre_cultivo)
         else:
             raise ValueError("Invalid crop type configuration")
 
@@ -75,6 +79,8 @@ class CalendarKc(KcStrategy):
             df_etapa_patron = df_etapa_patron[
                 df_etapa_patron["id_etapa"].isin(df_fenologia["id_etapa"])
             ].drop_duplicates()
+        else:
+            logger.debug("Phenology for %s:%s: UNIQUE", id_tipo_cultivo, nombre_cultivo)
 
         if not (df_fenologia.nombre_etapa == "Unico").any() and patron2.size > 1:
             cult, pat = id_tipo_cultivo[0], patron[0]
@@ -105,7 +111,7 @@ class CalendarKc(KcStrategy):
 
         df_etapa_patron["fechas"] = juliano2fechas(df_etapa_patron["juliano"], fecha=fecha)
         if (fecha < df_etapa_patron["fechas"].iloc[0]) or (fecha > df_etapa_patron["fechas"].iloc[-1]):
-            logger.debug("For date %s in stubble stage for %s", fecha, nombre_cultivo)
+            logger.debug("For date %s in stubble stage for %s:%s", fecha, id_tipo_cultivo, nombre_cultivo)
             return STUBBLE_KC
 
         df_etapa_patron_sorted = df_etapa_patron.sort_values("fechas")
@@ -115,7 +121,18 @@ class CalendarKc(KcStrategy):
                 df_etapa_patron_sorted = df_etapa_patron_sorted.drop(columns=[col])
         df_merged = df_fenologia.merge(df_etapa_patron_sorted, on="id_etapa")
         kc_values = df_merged["kc"].astype(float).values
-        return float(np.interp(fecha.toordinal(), fechas_numericas, kc_values))
+        kc = float(np.interp(fecha.toordinal(), fechas_numericas, kc_values))
+        etapa_rows = df_merged[fecha >= df_merged["fechas"]]
+        etapa_actual = etapa_rows.iloc[-1]["nombre_etapa"] if not etapa_rows.empty else "?"
+        logger.debug(
+            "For date %s interpolated Kc=%.3f for %s:%s en etapa %s",
+            fecha,
+            kc,
+            id_tipo_cultivo,
+            nombre_cultivo,
+            etapa_actual,
+        )
+        return kc
 
 
 class GddKc(KcStrategy):

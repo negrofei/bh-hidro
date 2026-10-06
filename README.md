@@ -6,30 +6,32 @@ bhERA5 sigue siendo el sistema en producción hasta que este repo lo reemplace. 
 
 ## Qué hay ahora
 
-Pipeline diario 0.1°: ERALand/WRF → IMERG Late/Early → balance calendario FAO → GeoJSON (y MBTiles si hay `tippecanoe`). Bootstrap copia solo referencia. Cron diario / Calib semanal / backup de operativo están en `scripts/`.
+Pipeline diario 0.1°: ERALand/WRF/GFS → IMERG Late/Early → balance calendario FAO → GeoJSON → tippecanoe (`config.json` para el tileserver). Bootstrap copia solo referencia. Cron diario / Calib semanal / backup de operativo están en `scripts/`.
 
 ```
 src/bh_hidro/
   physics/penman.py  # FAO Penman-Monteith (sin reescribir la cuenta)
   db/models/         # contrato ORM 0p1
   db/bootstrap.py    # CREATE bh_hidro + INSERT…SELECT de referencia
-  ingest/download/   # CDS ERALand + S3 WRF → MySQL
+  ingest/download/   # CDS ERALand + S3 WRF + NOMADS GFS → MySQL
   ingest/imerg/      # NASA PPS Late/Early + FTP Calib → imerg0p1
   balance/           # FAO bucket + CalendarKc (GddKc para campañas)
-  output/            # GeoJSON → tippecanoe
+  output/            # GeoJSON → tippecanoe + config.json
 ```
 
 ```bash
 bh-hidro bootstrap --dry-run
-bh-hidro run --dry-run
 bh-hidro download --start-date 20260820 --end-date 20260822
 bh-hidro imerg --start-date 20260820 --end-date 20260822
 bh-hidro imerg --calib
 bh-hidro balance --start-date 20260820 --end-date 20260822
 bh-hidro output --start-date 20260820 --end-date 20260822
+./scripts/run.sh                 # pipeline completo, incluye tiles
 ```
 
-Hace falta CDO, un `.cdsapirc` vía `CDSAPI_RC`, y `IMERG_USER` / `IMERG_PASSWORD` (el email de NASA PPS en ambos). Calib semanal pide `IMERG_FTP_*`. `tippecanoe` es opcional: sin él se escribe GeoJSON y se salta el MBTiles.
+Hace falta CDO, un `.cdsapirc` vía `CDSAPI_RC`, y `IMERG_USER` / `IMERG_PASSWORD` (el email de NASA PPS en ambos). Calib semanal pide `IMERG_FTP_*`. La imagen de app instala `tippecanoe`; en el host, sin él `bh-hidro output` deja GeoJSON y `run.sh` no puede publicar tiles.
+
+Cada comando escribe su propio log en `LOG_DIR` (`/logs` en el contenedor, `./logs` en el host): `descarga_*`, `reportes_*`, `balance_*`, `output_*`. El balance además deja `process_balance_cult{id}_prov{id}_*.log` por par cultivo×provincia.
 
 ERA5 / 0.25° / NoAgr / PNG quedan fuera del primer corte.
 
@@ -65,7 +67,9 @@ docker compose exec app bh-hidro status
 docker compose exec app bh-hidro bootstrap
 ```
 
-Compose pisa `DATABASE_HOST`/`DATABASE_PORT` adentro del contenedor. El `.env` del host puede seguir en `127.0.0.1:3308` para pytest/CLI.
+Compose pisa `DATABASE_HOST`/`DATABASE_PORT` y las rutas (`/logs`, `/descargas`, `/output`) adentro del contenedor. `./logs` queda bind-mount a `/logs`. Los tiles publicados van a `${TILES_HOST_DIR:-./output/tiles}` (en prod, el dir que monta el tileserver, p.ej. `/var/www/liberagro/geodata/tiles`).
+
+El venv del host **sí** corre `status` / `bootstrap` / el pipeline. `/logs` es ruta de contenedor: si el `.env` todavía la tiene, el CLI la traduce a `./logs`. También podés ejecutar lo mismo adentro con `docker compose exec app bh-hidro …`. La imagen trae `vim`, `htop` y `tippecanoe`.
 
 Si no hubiera `bh-mysql-prod` (máquina limpia), el opt-in es `docker compose -f docker-compose.embedded.yml up --build -d` (MySQL en **3309**). No lo uses en este servidor.
 
@@ -78,4 +82,4 @@ python3 -m venv .venv
 .venv/bin/pytest
 ```
 
-La app queda idle (`tail -f /dev/null`), igual que en prod. `scripts/run.sh` es el cron diario. `scripts/run_weekly.sh` es Calib. `scripts/backup_operativo.sh` hace mysqldump solo de las tablas operativas. Ejemplos de crontab en `scripts/cron.example`.
+La app queda idle (`tail -f /dev/null`), igual que en prod. `scripts/run.sh` es el cron diario (incluye tippecanoe + `config.json`). `scripts/run_weekly.sh` es Calib. `scripts/backup_operativo.sh` hace mysqldump solo de las tablas operativas. Ejemplos de crontab en `scripts/cron.example`.

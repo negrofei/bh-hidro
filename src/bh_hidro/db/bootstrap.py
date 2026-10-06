@@ -85,7 +85,14 @@ async def create_schema(settings: Settings) -> None:
         await engine.dispose()
 
 
+async def _ping(engine) -> None:
+    async with engine.connect() as conn:
+        await conn.execute(text("SELECT 1"))
+
+
 async def _table_count(engine, database: str, table: str) -> int | None:
+    from sqlalchemy.exc import ProgrammingError
+
     try:
         return int(
             await _scalar(
@@ -94,7 +101,7 @@ async def _table_count(engine, database: str, table: str) -> int | None:
             )
             or 0
         )
-    except Exception:
+    except ProgrammingError:
         return None
 
 
@@ -127,6 +134,15 @@ async def copy_reference_tables(
     copied: dict[str, int] = {}
     skipped: dict[str, int] = {}
     try:
+        try:
+            await _ping(engine)
+        except Exception as exc:
+            raise RuntimeError(
+                f"No pude conectar a {settings.source_database_name} en "
+                f"{settings.database_host}:{settings.database_port} ({exc}). "
+                "MySQL 8 necesita el paquete cryptography en el venv "
+                "(`pip install -e .`)."
+            ) from exc
         for table in REFERENCE_TABLES:
             if table not in Base.metadata.tables:
                 logger.warning("ORM has no table %s, skipping", table)

@@ -1,9 +1,30 @@
 """Runtime settings from environment (and optional .env)."""
 
+from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import quote_plus
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# .env of the image uses these absolute paths. On the host they are not writable.
+_HOST_PATHS = {
+    Path("/logs"): Path("logs"),
+    Path("/descargas"): Path("descargas"),
+    Path("/output"): Path("output"),
+}
+
+
+def running_in_container() -> bool:
+    return Path("/.dockerenv").is_file()
+
+
+def host_path(path: Path, in_container: bool | None = None) -> Path:
+    if in_container is None:
+        in_container = running_in_container()
+    if in_container:
+        return path
+    return _HOST_PATHS.get(path, path)
 
 
 class Settings(BaseSettings):
@@ -29,6 +50,8 @@ class Settings(BaseSettings):
     delta_days_forward: int = 1
     delta_days_back_output: int = 1
     delta_days_forward_output: int = 7
+    # Only this calendar day may initialize almacenaje at 50% agua útil.
+    first_day_of_all_time: str = "20000101"
 
     imerg_user: str = ""
     imerg_password: str = ""
@@ -49,9 +72,21 @@ class Settings(BaseSettings):
     balance_config: Path = Path("configs/example/balance.ini")
     output_config: Path = Path("configs/example/output.ini")
 
+    @model_validator(mode="after")
+    def remap_container_paths_on_host(self) -> "Settings":
+        self.log_dir = host_path(self.log_dir)
+        self.down_dir = host_path(self.down_dir)
+        self.out_dir = host_path(self.out_dir)
+        return self
+
     @property
     def source_port(self) -> int:
         return int(self.source_database_port or self.database_port)
+
+    @property
+    def first_day(self) -> date:
+        raw = self.first_day_of_all_time.replace("-", "")
+        return datetime.strptime(raw, "%Y%m%d").date()
 
     def database_url(self, database: str | None = None) -> str:
         name = database if database is not None else self.database_name

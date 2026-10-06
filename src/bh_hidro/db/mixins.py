@@ -69,6 +69,11 @@ class TableOps:
         async with get_session() as session:
             for start in range(0, len(records), chunk_size):
                 batch = records[start : start + chunk_size]
+                logger.debug(
+                    "Inserting chunk %.0f%% of %s",
+                    100 * (start + len(batch)) / len(records),
+                    cls.__tablename__,
+                )
                 stmt = insert(cls.__table__).values(batch)
                 if update_cols:
                     stmt = stmt.on_duplicate_key_update(
@@ -137,7 +142,11 @@ class GridLinked(TableOps):
         nodes = await cls.association().read_by_provincias(provincias)
         if nodes.empty:
             return []
-        stmt = select(cls.fecha.distinct()).where(cls.id_nodo.in_(nodes["id_nodo"].tolist()))
+        stmt = (
+            select(cls.__table__.c.fecha.label("fecha"))
+            .where(cls.id_nodo.in_(nodes["id_nodo"].tolist()))
+            .distinct()
+        )
         for name, value in filters.items():
             stmt = stmt.where(getattr(cls, name) == value)
         df = await cls.fetch_df(stmt)

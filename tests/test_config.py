@@ -1,6 +1,7 @@
+from datetime import date
 from pathlib import Path
 
-from bh_hidro.config import Settings
+from bh_hidro.config import Settings, host_path
 
 
 def test_database_url_default():
@@ -41,8 +42,17 @@ def test_same_mysql_instance_defaults_source_port():
     assert other.same_mysql_instance() is False
 
 
+def test_host_path_rewrites_container_mounts():
+    assert host_path(Path("/logs"), in_container=False) == Path("logs")
+    assert host_path(Path("/descargas"), in_container=False) == Path("descargas")
+    assert host_path(Path("/output"), in_container=False) == Path("output")
+    assert host_path(Path("/logs"), in_container=True) == Path("/logs")
+    assert host_path(Path("logs"), in_container=False) == Path("logs")
+
+
 def test_default_paths():
     settings = Settings()
     assert settings.log_dir == Path("logs") or settings.log_dir == Path("/logs")
     assert settings.delta_days_back == 7
     assert settings.delta_days_forward == 1
+    assert settings.first_day == date(2000, 1, 1)

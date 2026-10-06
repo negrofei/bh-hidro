@@ -47,6 +47,7 @@ async def crop_ids(codes: list[str]) -> pd.DataFrame:
 
 
 async def tipos_from_cultivo_general(id_cultivo_general: int) -> list[int]:
+    logger.debug("Getting crop types for crop %s", id_cultivo_general)
     cultivo = await CultivoGeneral.select_where(id_cultivo_general=id_cultivo_general)
     prefix = cultivo["codigo"].iloc[0]
     tipos = await TipoCultivo.read_all()
@@ -60,6 +61,7 @@ async def tipos_from_cultivo_general(id_cultivo_general: int) -> list[int]:
         )
         return ids.tolist()
     if "ROT" in prefix:
+        logger.debug("Rotational crop for %s", id_cultivo_general)
         rotaciones = re.findall(r"\((.*?)\)", prefix.split("-")[2])
         parts = [
             tipos[tipos["codigo"].str.contains("(" + rotacion + ")", regex=False)]["id_tipo_cultivo"]
@@ -118,9 +120,16 @@ async def base_frame(id_cultivo_general: int, id_provincia: int) -> pd.DataFrame
     merged = merged.merge(suelo, on="id_suelo", how="left")
     if "tipo_suelo" in merged.columns:
         merged = merged.drop(columns=["tipo_suelo"])
-    return merged.drop_duplicates(
+    out = merged.drop_duplicates(
         ["id_formita", "id_provincia", "id_departamento", "id_suelo", "id_nodo", "id_cultivo_general"]
     )
+    logger.info(
+        "Created base dataframe with %s records for crop=%s provincia=%s",
+        len(out),
+        id_cultivo_general,
+        id_provincia,
+    )
+    return out
 
 
 async def rel_etapa_patron() -> pd.DataFrame:
